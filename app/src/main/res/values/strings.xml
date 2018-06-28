@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">PicGeek</string>
+
+    <string name="temp_name">Picture</string>
 </resources>
