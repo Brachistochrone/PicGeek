@@ -5,17 +5,26 @@ import android.support.annotation.NonNull;
 import android.support.v4.app.Fragment;
 import android.support.v7.widget.DefaultItemAnimator;
 import android.support.v7.widget.GridLayoutManager;
-import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.TextView;
 
 import com.artemlikhomanov.picgeek.R;
+import com.artemlikhomanov.picgeek.application.PicGeekApp;
+import com.artemlikhomanov.picgeek.model.Const;
+import com.artemlikhomanov.picgeek.model.Photos;
+import com.artemlikhomanov.picgeek.model.PhotosResponse;
 import com.artemlikhomanov.picgeek.views.CaptionedImageView;
 
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+
 public class GalleryFragment extends ListAbstractFragment {
+
+    private static final String TAG = "GalleryFragment";
 
     @Override
     void setupRecyclerView() {
@@ -33,6 +42,25 @@ public class GalleryFragment extends ListAbstractFragment {
         mRecyclerView.setHasFixedSize(true);
         mRecyclerView.setItemAnimator(new DefaultItemAnimator());
         mRecyclerView.setAdapter(new GalleryAdapter());
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+
+        PicGeekApp.getApi().getRecentPics(Const.FETCH_RECENT_METHOD, Const.API_KEY,
+                                        Const.EXTRAS, Const.FORMAT, Const.NOJSONCALLBACK)
+                .enqueue(new Callback<PhotosResponse>() {
+                    @Override
+                    public void onResponse(Call<PhotosResponse> call, Response<PhotosResponse> response) {
+                        Log.i(TAG, " " + response.body().getPhotos().getPhotos().get(0).toString());
+                    }
+
+                    @Override
+                    public void onFailure(Call<PhotosResponse> call, Throwable t) {
+                        Log.i(TAG, t.toString());
+                    }
+                });
     }
 
     @NonNull
