@@ -52,4 +52,12 @@ public class Photos {
     public List<Photo> getPhotos() {
         return mPhotos;
     }
+
+    public String nextPage() {
+        return String.valueOf(mNumberOfPage + 1);
+    }
+
+    public boolean isLastPage () {
+        return mNumberOfPage.equals(mTotalPages);
+    }
 }

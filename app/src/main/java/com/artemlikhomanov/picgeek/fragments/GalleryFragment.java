@@ -13,10 +13,15 @@ import android.view.ViewGroup;
 
 import com.artemlikhomanov.picgeek.R;
 import com.artemlikhomanov.picgeek.application.PicGeekApp;
+import com.artemlikhomanov.picgeek.fragments.listeners.OnBottomReachedListener;
 import com.artemlikhomanov.picgeek.model.Const;
+import com.artemlikhomanov.picgeek.model.Photo;
 import com.artemlikhomanov.picgeek.model.Photos;
 import com.artemlikhomanov.picgeek.model.PhotosResponse;
-import com.artemlikhomanov.picgeek.views.CaptionedImageView;
+import com.artemlikhomanov.picgeek.views.SquareImageView;
+import com.squareup.picasso.Picasso;
+
+import java.util.List;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -25,6 +30,9 @@ import retrofit2.Response;
 public class GalleryFragment extends ListAbstractFragment {
 
     private static final String TAG = "GalleryFragment";
+
+    private List<Photo> mPhotos;
+    private Photos mPhotosMeta;
 
     @Override
     void setupRecyclerView() {
@@ -41,26 +49,67 @@ public class GalleryFragment extends ListAbstractFragment {
         mRecyclerView.setLayoutManager(layoutManager);
         mRecyclerView.setHasFixedSize(true);
         mRecyclerView.setItemAnimator(new DefaultItemAnimator());
-        mRecyclerView.setAdapter(new GalleryAdapter());
     }
 
     @Override
     public void onStart() {
         super.onStart();
+        fetchPics();
+    }
 
-        PicGeekApp.getApi().getRecentPics(Const.FETCH_RECENT_METHOD, Const.API_KEY,
+    private void fetchPics() {
+
+        if (mPhotosMeta == null) {
+            PicGeekApp.getApi().getPics(Const.FETCH_RECENT_METHOD, Const.API_KEY,
                                         Const.EXTRAS, Const.FORMAT, Const.NOJSONCALLBACK)
-                .enqueue(new Callback<PhotosResponse>() {
-                    @Override
-                    public void onResponse(Call<PhotosResponse> call, Response<PhotosResponse> response) {
-                        Log.i(TAG, " " + response.body().getPhotos().getPhotos().get(0).toString());
-                    }
+                    .enqueue(new Callback<PhotosResponse>() {
+                        @Override
+                        public void onResponse(Call<PhotosResponse> call, Response<PhotosResponse> response) {
+                            if (response.body() != null) {
+                                mPhotosMeta = response.body().getPhotos();
+                                mPhotos = mPhotosMeta.getPhotos();
 
-                    @Override
-                    public void onFailure(Call<PhotosResponse> call, Throwable t) {
-                        Log.i(TAG, t.toString());
-                    }
-                });
+                                mRecyclerView.setAdapter(new GalleryAdapter(mPhotos, new OnBottomReachedListener() {
+                                    @Override
+                                    public void onBottomReached() {
+                                        if (!mPhotosMeta.isLastPage()) {
+                                            fetchPics();
+                                        }
+                                    }
+                                }));
+
+                            } else {
+                                Log.i(TAG, "response.body() == null");
+                            }
+                        }
+
+                        @Override
+                        public void onFailure(Call<PhotosResponse> call, Throwable t) {
+                            Log.i(TAG, t.toString());
+                        }
+                    });
+        } else {
+            PicGeekApp.getApi().getPics(Const.FETCH_RECENT_METHOD, Const.API_KEY,
+                                        Const.EXTRAS, mPhotosMeta.nextPage(),
+                                        Const.FORMAT, Const.NOJSONCALLBACK)
+                    .enqueue(new Callback<PhotosResponse>() {
+                        @Override
+                        public void onResponse(Call<PhotosResponse> call, Response<PhotosResponse> response) {
+                            if (response.body() != null) {
+                                mPhotosMeta = response.body().getPhotos();
+                                mPhotos.addAll(mPhotosMeta.getPhotos());
+                                mRecyclerView.getAdapter().notifyDataSetChanged();
+                            } else {
+                                Log.i(TAG, "response.body() == null");
+                            }
+                        }
+
+                        @Override
+                        public void onFailure(Call<PhotosResponse> call, Throwable t) {
+                            Log.i(TAG, t.toString());
+                        }
+                    });
+        }
     }
 
     @NonNull
@@ -70,22 +119,37 @@ public class GalleryFragment extends ListAbstractFragment {
 
     private class GalleryViewHolder extends RecyclerView.ViewHolder {
 
-        private CaptionedImageView mThumbnail;
+        private SquareImageView mThumbnail;
+        private Photo mPhoto;
 
         GalleryViewHolder(View itemView) {
             super(itemView);
             mThumbnail = itemView.findViewById(R.id.thumbnail);
         }
 
-        void bindData(String name, int resId) {
-            mThumbnail.setText(name);
-            mThumbnail.setImageResource(resId);
+        void bindData(Photo photo) {
+            if (photo != null) {
+                mPhoto = photo;
+                Picasso.get()
+                        .load(photo.getUrl_q())
+                        .placeholder(R.drawable.image_placeholder)
+                        .into(mThumbnail);
+            } else {
+                mThumbnail.setImageResource(R.drawable.image_placeholder);
+            }
         }
     }
 
     private class GalleryAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
-        private int[] mInts = new int[20];
+        private List<Photo> mPhotos;
+
+        private OnBottomReachedListener mListener;
+
+        GalleryAdapter(List<Photo> photos, OnBottomReachedListener listener) {
+            mPhotos = photos;
+            mListener = listener;
+        }
 
         @NonNull
         @Override
@@ -97,12 +161,26 @@ public class GalleryFragment extends ListAbstractFragment {
 
         @Override
         public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
-            ((GalleryViewHolder)holder).bindData(getString(R.string.temp_name), R.drawable.sorry_closed);
+
+            if (mPhotos != null) {
+                ((GalleryViewHolder)holder).bindData(mPhotos.get(position));
+
+                if (position == mPhotos.size() - 1) {
+                    mListener.onBottomReached();
+                }
+
+            } else {
+                ((GalleryViewHolder)holder).bindData(null);
+            }
         }
 
         @Override
         public int getItemCount() {
-            return mInts.length;
+            if (mPhotos != null) {
+                return mPhotos.size();
+            } else {
+                return 20;
+            }
         }
     }
 }
