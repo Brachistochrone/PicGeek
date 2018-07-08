@@ -1,7 +1,9 @@
 package com.artemlikhomanov.picgeek.fragments;
 
 import android.content.res.Configuration;
+import android.os.Bundle;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.support.v7.widget.DefaultItemAnimator;
 import android.support.v7.widget.GridLayoutManager;
@@ -21,18 +23,46 @@ import com.artemlikhomanov.picgeek.model.PhotosResponse;
 import com.artemlikhomanov.picgeek.views.SquareImageView;
 import com.squareup.picasso.Picasso;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 
-public class GalleryFragment extends ListAbstractFragment {
+public class GalleryFragment extends ListAbstractFragment implements OnBottomReachedListener {
 
     private static final String TAG = "GalleryFragment";
+    private static final String PHOTOS_EXTRA_KEY = "PHOTOS_EXTRA_KEY";
+    private static final String PHOTOS_META_EXTRA_KEY = "PHOTOS_META_EXTRA_KEY";
+    private static final String FIRST_FETCHING_EXTRA_KEY = "FIRST_FETCHING_EXTRA_KEY";
 
-    private List<Photo> mPhotos;
+    private ArrayList<Photo> mPhotos;
     private Photos mPhotosMeta;
+
+    private boolean mIsFirstFetching = true;
+
+    @Override
+    public void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putParcelableArrayList(PHOTOS_EXTRA_KEY, mPhotos);
+        outState.putParcelable(PHOTOS_META_EXTRA_KEY, mPhotosMeta);
+        outState.putBoolean(FIRST_FETCHING_EXTRA_KEY, mIsFirstFetching);
+    }
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        extractSavedValues(savedInstanceState);
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        if (mIsFirstFetching) {
+            fetchPics();
+        }
+    }
 
     @Override
     void setupRecyclerView() {
@@ -49,35 +79,47 @@ public class GalleryFragment extends ListAbstractFragment {
         mRecyclerView.setLayoutManager(layoutManager);
         mRecyclerView.setHasFixedSize(true);
         mRecyclerView.setItemAnimator(new DefaultItemAnimator());
+
+        if (!mIsFirstFetching) {
+            setupAdapter();
+        }
     }
 
     @Override
-    public void onStart() {
-        super.onStart();
-        fetchPics();
+    public void onBottomReached() {
+        if (!mPhotosMeta.isLastPage()) {
+            fetchPics();
+        }
+    }
+
+    private void setupAdapter() {
+        if(isAdded()) {
+            if (mRecyclerView != null) {
+                mRecyclerView.setAdapter(new GalleryAdapter(mPhotos, this));
+            }
+        }
     }
 
     private void fetchPics() {
 
-        if (mPhotosMeta == null) {
-            PicGeekApp.getApi().getPics(Const.FETCH_RECENT_METHOD, Const.API_KEY,
-                                        Const.EXTRAS, Const.FORMAT, Const.NOJSONCALLBACK)
+        PicGeekApp.getApi().getPics(Const.FETCH_RECENT_METHOD, Const.API_KEY,
+                                    Const.EXTRAS, Const.FORMAT, Const.NOJSONCALLBACK)
                     .enqueue(new Callback<PhotosResponse>() {
                         @Override
                         public void onResponse(Call<PhotosResponse> call, Response<PhotosResponse> response) {
                             if (response.body() != null) {
-                                mPhotosMeta = response.body().getPhotos();
-                                mPhotos = mPhotosMeta.getPhotos();
-
-                                mRecyclerView.setAdapter(new GalleryAdapter(mPhotos, new OnBottomReachedListener() {
-                                    @Override
-                                    public void onBottomReached() {
-                                        if (!mPhotosMeta.isLastPage()) {
-                                            fetchPics();
-                                        }
+                                if (mIsFirstFetching) {
+                                    mPhotosMeta = response.body().getPhotos();
+                                    mPhotos = (ArrayList<Photo>) mPhotosMeta.getPhotos();
+                                    mIsFirstFetching = false;
+                                    setupAdapter();
+                                } else {
+                                    mPhotosMeta = response.body().getPhotos();
+                                    mPhotos.addAll(mPhotosMeta.getPhotos());
+                                    if (mRecyclerView.getAdapter() != null) {
+                                        mRecyclerView.getAdapter().notifyDataSetChanged();
                                     }
-                                }));
-
+                                }
                             } else {
                                 Log.i(TAG, "response.body() == null");
                             }
@@ -88,27 +130,13 @@ public class GalleryFragment extends ListAbstractFragment {
                             Log.i(TAG, t.toString());
                         }
                     });
-        } else {
-            PicGeekApp.getApi().getPics(Const.FETCH_RECENT_METHOD, Const.API_KEY,
-                                        Const.EXTRAS, mPhotosMeta.nextPage(),
-                                        Const.FORMAT, Const.NOJSONCALLBACK)
-                    .enqueue(new Callback<PhotosResponse>() {
-                        @Override
-                        public void onResponse(Call<PhotosResponse> call, Response<PhotosResponse> response) {
-                            if (response.body() != null) {
-                                mPhotosMeta = response.body().getPhotos();
-                                mPhotos.addAll(mPhotosMeta.getPhotos());
-                                mRecyclerView.getAdapter().notifyDataSetChanged();
-                            } else {
-                                Log.i(TAG, "response.body() == null");
-                            }
-                        }
+    }
 
-                        @Override
-                        public void onFailure(Call<PhotosResponse> call, Throwable t) {
-                            Log.i(TAG, t.toString());
-                        }
-                    });
+    private void extractSavedValues(Bundle savedState) {
+        if (savedState != null) {
+            mPhotos = savedState.getParcelableArrayList(PHOTOS_EXTRA_KEY);
+            mPhotosMeta = savedState.getParcelable(PHOTOS_META_EXTRA_KEY);
+            mIsFirstFetching = savedState.getBoolean(FIRST_FETCHING_EXTRA_KEY);
         }
     }
 

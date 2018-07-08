@@ -1,12 +1,15 @@
 package com.artemlikhomanov.picgeek.model;
 
+import android.os.Parcel;
+import android.os.Parcelable;
+
 import com.google.gson.annotations.Expose;
 import com.google.gson.annotations.SerializedName;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class Photos {
+public class Photos implements Parcelable {
 
     @SerializedName("page")
     @Expose
@@ -60,4 +63,32 @@ public class Photos {
     public boolean isLastPage () {
         return mNumberOfPage.equals(mTotalPages);
     }
+
+    @Override
+    public int describeContents() {
+        return 0;
+    }
+
+    @Override
+    public void writeToParcel(Parcel dest, int flags) {
+        dest.writeValue(this.mNumberOfPage);
+        dest.writeValue(this.mTotalPages);
+    }
+
+    private Photos(Parcel in) {
+        this.mNumberOfPage = (Integer) in.readValue(Integer.class.getClassLoader());
+        this.mTotalPages = (Integer) in.readValue(Integer.class.getClassLoader());
+    }
+
+    public static final Parcelable.Creator<Photos> CREATOR = new Parcelable.Creator<Photos>() {
+        @Override
+        public Photos createFromParcel(Parcel source) {
+            return new Photos(source);
+        }
+
+        @Override
+        public Photos[] newArray(int size) {
+            return new Photos[size];
+        }
+    };
 }
